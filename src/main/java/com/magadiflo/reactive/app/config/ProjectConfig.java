@@ -1,39 +1,41 @@
 package com.magadiflo.reactive.app.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
-import org.springframework.security.core.userdetails.MapReactiveUserDetailsService;
-import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.password.NoOpPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtGrantedAuthoritiesConverterAdapter;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 
-@EnableReactiveMethodSecurity
+@EnableReactiveMethodSecurity //<-- Habilita la función de seguridad de métodos reactivos
 @Configuration
 public class ProjectConfig {
 
+    @Value("${jwks.endpoint}")
+    private String jwksEndpoint;
+
     @Bean
-    public ReactiveUserDetailsService reactiveUserDetailsService() {
-        UserDetails admin = User.builder()
-                .username("admin")
-                .password("12345")
-                .roles("ADMIN")
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+        return http.authorizeExchange(authorize -> authorize.anyExchange().authenticated())
+                // Configura el método de autenticación del ResourceServer
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        // Especifica la forma en que se valida el token
+                        .jwt(jwtSpec -> jwtSpec.jwkSetUri(this.jwksEndpoint)))
                 .build();
-
-        UserDetails regularUser = User.builder()
-                .username("user")
-                .password("12345")
-                .roles("REGULAR_USER")
-                .build();
-
-        return new MapReactiveUserDetailsService(admin, regularUser);
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return NoOpPasswordEncoder.getInstance();
-    }
+    public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        jwtGrantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
+        jwtGrantedAuthoritiesConverter.setAuthorityPrefix("");
 
+        ReactiveJwtGrantedAuthoritiesConverterAdapter adapter = new ReactiveJwtGrantedAuthoritiesConverterAdapter(jwtGrantedAuthoritiesConverter);
+        ReactiveJwtAuthenticationConverter reactiveJwtAuthenticationConverter = new ReactiveJwtAuthenticationConverter();
+        reactiveJwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(adapter);
+        return reactiveJwtAuthenticationConverter;
+    }
 }
